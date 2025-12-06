@@ -8,6 +8,7 @@ import http.server
 import socketserver
 import os
 import sys
+import signal
 import urllib.request
 import urllib.error
 import time
@@ -119,21 +120,34 @@ class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.send_response(200)
         self.end_headers()
 
+class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
 def main():
     # 获取当前脚本所在目录
     script_dir = os.path.dirname(os.path.abspath(__file__))
     os.chdir(script_dir)
     
+    httpd = None
+    
+    def signal_handler(signum, frame):
+        print("\n正在停止服务器...")
+        if httpd:
+            httpd.shutdown()
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     try:
-        with socketserver.TCPServer(("", PORT), MyHTTPRequestHandler) as httpd:
-            print(f"服务器已启动，运行在 http://localhost:{PORT}")
-            print("请在浏览器中访问以上地址来使用API Key用量查询工具")
-            print(f"HTML文件路径: {os.path.join(script_dir, 'index.html')}")
-            print(f"API代理地址: http://localhost:{PORT}/api/proxy")
-            print("按 Ctrl+C 停止服务器")
-            httpd.serve_forever()
+        httpd = ThreadedTCPServer(("", PORT), MyHTTPRequestHandler)
+        print(f"服务器已启动，运行在 http://localhost:{PORT}")
+        httpd.serve_forever()
     except KeyboardInterrupt:
         print("\n服务器已停止")
+        if httpd:
+            httpd.shutdown()
         sys.exit(0)
     except Exception as e:
         print(f"启动服务器时出错: {e}")

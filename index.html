@@ -253,6 +253,7 @@
                             <th>剩余额度</th>
                             <th>余额百分比</th>
                             <th>消耗速率</th>
+                            <th>预计可用</th>
                             <th>操作</th>
                         </tr>
                     </thead>
@@ -496,7 +497,7 @@
             row.setAttribute('data-key', key);
             
             const keyCell = document.createElement('td');
-            keyCell.textContent = key.substring(0, 20) + '...' + key.substring(key.length - 10);
+            keyCell.textContent = key.substring(0, 8) + '...' + key.substring(key.length - 4);
             row.appendChild(keyCell);
             
             const initialCell = document.createElement('td');
@@ -514,6 +515,17 @@
             const rateCell = document.createElement('td');
             rateCell.textContent = rateDisplay;
             row.appendChild(rateCell);
+            
+            const estimatedTimeCell = document.createElement('td');
+            if (consumeRate > 0) {
+                const totalHours = remainingQuota / consumeRate;
+                const hours = Math.floor(totalHours);
+                const minutes = Math.floor((totalHours - hours) * 60);
+                estimatedTimeCell.textContent = hours + '小时' + minutes + '分钟';
+            } else {
+                estimatedTimeCell.textContent = '-';
+            }
+            row.appendChild(estimatedTimeCell);
             
             const actionsCell = document.createElement('td');
             const actionsDiv = document.createElement('div');
@@ -546,7 +558,7 @@
             
             const keys = getApiKeys();
             if (keys.length === 0) {
-                tableBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: #888;">暂无API Keys，添加后将显示用量</td></tr>';
+                tableBody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #888;">暂无API Keys，添加后将显示用量</td></tr>';
             }
         }
         
