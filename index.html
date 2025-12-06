@@ -302,12 +302,37 @@
             }
         }
         
+        function validateApiKey(key) {
+            if (!key || key.length < 20) {
+                return { valid: false, error: 'API Key 长度不足' };
+            }
+            if (key.length > 200) {
+                return { valid: false, error: 'API Key 长度超出限制' };
+            }
+            if (!/^[a-zA-Z0-9_\-]+$/.test(key)) {
+                return { valid: false, error: 'API Key 包含非法字符' };
+            }
+            return { valid: true };
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
         function addApiKey() {
             const input = document.getElementById('apiKeyInput');
             const key = input.value.trim();
             
             if (!key) {
                 showMessage('请输入API Key', 'error');
+                return;
+            }
+            
+            const validation = validateApiKey(key);
+            if (!validation.valid) {
+                showMessage(validation.error, 'error');
                 return;
             }
             
@@ -467,26 +492,51 @@
             
             const rateDisplay = consumeRate > 0 ? formatNumber(Math.round(consumeRate)) + '/小时' : '-';
             
-            const rowHtml = `
-                <tr data-key="${key}">
-                    <td>${key.substring(0, 20)}...${key.substring(key.length - 10)}</td>
-                    <td>${formatNumber(initialQuota)}</td>
-                    <td>${formatNumber(remainingQuota)}</td>
-                    <td>${percentage}</td>
-                    <td>${rateDisplay}</td>
-                    <td>
-                        <div class="actions">
-                            <button onclick="fetchUsage('${key}')">刷新</button>
-                            <button class="danger" onclick="deleteApiKey('${key}')">删除</button>
-                        </div>
-                    </td>
-                </tr>
-            `;
+            const row = document.createElement('tr');
+            row.setAttribute('data-key', key);
+            
+            const keyCell = document.createElement('td');
+            keyCell.textContent = key.substring(0, 20) + '...' + key.substring(key.length - 10);
+            row.appendChild(keyCell);
+            
+            const initialCell = document.createElement('td');
+            initialCell.textContent = formatNumber(initialQuota);
+            row.appendChild(initialCell);
+            
+            const remainingCell = document.createElement('td');
+            remainingCell.textContent = formatNumber(remainingQuota);
+            row.appendChild(remainingCell);
+            
+            const percentageCell = document.createElement('td');
+            percentageCell.textContent = percentage;
+            row.appendChild(percentageCell);
+            
+            const rateCell = document.createElement('td');
+            rateCell.textContent = rateDisplay;
+            row.appendChild(rateCell);
+            
+            const actionsCell = document.createElement('td');
+            const actionsDiv = document.createElement('div');
+            actionsDiv.className = 'actions';
+            
+            const refreshBtn = document.createElement('button');
+            refreshBtn.textContent = '刷新';
+            refreshBtn.addEventListener('click', () => fetchUsage(key));
+            actionsDiv.appendChild(refreshBtn);
+            
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'danger';
+            deleteBtn.textContent = '删除';
+            deleteBtn.addEventListener('click', () => deleteApiKey(key));
+            actionsDiv.appendChild(deleteBtn);
+            
+            actionsCell.appendChild(actionsDiv);
+            row.appendChild(actionsCell);
             
             if (existingRow) {
-                existingRow.outerHTML = rowHtml;
+                existingRow.replaceWith(row);
             } else {
-                tableBody.innerHTML += rowHtml;
+                tableBody.appendChild(row);
             }
         }
         

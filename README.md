@@ -47,6 +47,42 @@ python server.py
 4. 点击「刷新全部」更新所有 Key 的用量
 5. 点击「清理快用完的」删除余额低于 5% 的 Key
 
+## 安全建议
+
+**生产环境部署时，强烈建议使用 HTTPS 来保护 API Key 传输安全。**
+
+推荐使用 Nginx 或 Caddy 作为反向代理并配置 SSL：
+
+### Nginx 配置示例
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name your-domain.com;
+    
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+    
+    location / {
+        proxy_pass http://127.0.0.1:8003;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+### Caddy 配置示例
+
+```
+your-domain.com {
+    reverse_proxy localhost:8003
+}
+```
+
+Caddy 会自动申请和续期 Let's Encrypt 证书。
+
 ## License
 
 MIT

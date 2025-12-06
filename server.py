@@ -10,57 +10,102 @@ import os
 import sys
 import urllib.request
 import urllib.error
+import time
+import re
+from collections import defaultdict
 
 PORT = 8003
 API_URL = 'https://app.factory.ai/api/organization/members/chat-usage'
 
+RATE_LIMIT_REQUESTS = 30
+RATE_LIMIT_WINDOW = 60
+
+request_counts = defaultdict(list)
+
 class MyHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def get_client_ip(self):
+        forwarded = self.headers.get('X-Forwarded-For')
+        if forwarded:
+            return forwarded.split(',')[0].strip()
+        return self.client_address[0]
+    
+    def is_rate_limited(self):
+        client_ip = self.get_client_ip()
+        now = time.time()
+        request_counts[client_ip] = [t for t in request_counts[client_ip] if now - t < RATE_LIMIT_WINDOW]
+        if len(request_counts[client_ip]) >= RATE_LIMIT_REQUESTS:
+            return True
+        request_counts[client_ip].append(now)
+        return False
+    
+    def validate_auth_header(self, auth_header):
+        if not auth_header:
+            return False, 'Authorization header is required'
+        if not auth_header.startswith('Bearer '):
+            return False, 'Invalid Authorization format'
+        token = auth_header[7:]
+        if len(token) < 20 or len(token) > 200:
+            return False, 'Invalid token length'
+        if not re.match(r'^[a-zA-Z0-9_\-]+$', token):
+            return False, 'Invalid token format'
+        return True, token
+    
     def do_GET(self):
-        # 处理API代理请求
         if self.path.startswith('/api/proxy'):
             self.handle_api_proxy()
         else:
-            # 处理静态文件请求
             super().do_GET()
     
     def handle_api_proxy(self):
         """处理API代理请求，转发到目标API服务器"""
         try:
-            # 获取Authorization头
-            auth_header = self.headers.get('Authorization')
-            if not auth_header:
-                self.send_error(400, 'Authorization header is required')
+            if self.is_rate_limited():
+                self.send_response(429)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"error": "Too many requests"}')
                 return
             
-            # 创建代理请求
+            auth_header = self.headers.get('Authorization')
+            valid, result = self.validate_auth_header(auth_header)
+            if not valid:
+                self.send_response(400)
+                self.send_header('Content-Type', 'application/json')
+                self.end_headers()
+                self.wfile.write(f'{{"error": "{result}"}}'.encode())
+                return
+            
             req = urllib.request.Request(API_URL)
             req.add_header('Authorization', auth_header)
-            req.add_header('User-Agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36')
+            req.add_header('User-Agent', 'Mozilla/5.0')
             
-            # 发送请求并获取响应
-            with urllib.request.urlopen(req) as response:
-                # 读取响应内容
+            with urllib.request.urlopen(req, timeout=30) as response:
                 content = response.read()
                 content_type = response.getheader('Content-Type', 'application/json')
                 
-                # 发送响应
                 self.send_response(200)
                 self.send_header('Content-Type', content_type)
-                self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(content)
         
         except urllib.error.HTTPError as e:
-            # 处理HTTP错误
             self.send_response(e.code)
             self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
             self.end_headers()
-            self.wfile.write(f'{{"error": "{e.reason}"}}'.encode())
+            error_msg = 'Unauthorized' if e.code == 401 else 'API request failed'
+            self.wfile.write(f'{{"error": "{error_msg}"}}'.encode())
         
-        except Exception as e:
-            # 处理其他错误
-            self.send_error(500, f'Proxy error: {str(e)}')
+        except urllib.error.URLError:
+            self.send_response(503)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"error": "Service unavailable"}')
+        
+        except Exception:
+            self.send_response(500)
+            self.send_header('Content-Type', 'application/json')
+            self.end_headers()
+            self.wfile.write(b'{"error": "Internal server error"}')
     
     def end_headers(self):
         # 添加CORS头，允许所有来源
