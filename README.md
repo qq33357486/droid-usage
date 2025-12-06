@@ -28,7 +28,7 @@ docker-compose up -d
 ### Docker
 
 ```bash
-docker run -d -p 8003:8003 --restart unless-stopped --name droid-usage qq33357486/droid-usage:latest
+docker run -d -p 8003:8003 --restart always --name droid-usage qq33357486/droid-usage:latest
 ```
 
 ### 本地运行

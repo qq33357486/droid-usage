@@ -4,4 +4,4 @@ services:
     image: qq33357486/droid-usage:latest
     ports:
       - "8003:8003"
-    restart: unless-stopped
+    restart: always
